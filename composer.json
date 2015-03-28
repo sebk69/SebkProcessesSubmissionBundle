@@ -1,9 +1,9 @@
 {
-  "name": "sebk69/SebkProcessesSubmitBundle",
+  "name": "sebk69/SebkProcessesSubmissionBundle",
   "license": "GPL V3",
   "type": "project",
   "description": "Processes management lotified",
   "autoload": {
-    "psr-4": { "Sebk\\ProcessesSubmitBundle\\SebkProcessesSubmissionBundle\\": "" }
+    "psr-4": { "Sebk\\SebkProcessesSubmissionBundle\\SebkProcessesSubmissionBundle\\": "" }
   }
 }
