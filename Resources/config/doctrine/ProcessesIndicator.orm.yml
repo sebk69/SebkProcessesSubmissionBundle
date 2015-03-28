@@ -1,0 +1,24 @@
+Sebk\ProcessesSubmissionBundle\Entity\ProcessesIndicator:
+    type: entity
+    table: processes_indicator
+    repositoryClass: ProcessesIndicatorRepository
+    id:
+        id:
+            type: integer
+            generator:
+                strategy: AUTO
+    fields:
+        name:
+            type: string
+            length: 255
+        state:
+            type: string
+            length: 255
+        pid:
+            type: string
+            length: 45
+            nullable: true
+    uniqueConstraints:
+        UNIQUE_NAME:
+            columns:
+                - name
