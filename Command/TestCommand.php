@@ -25,12 +25,12 @@ class TestCommand extends ContainerAwareCommand
     protected function configure()
     {
         $this
-            ->setName('processes:test')
-            ->setDescription('Test dixheure')
+            ->setName('sebk:processes-submission:example')
+            ->setDescription('Test processes submission')
             ->setHelp(<<<EOT
-This command allow you to run unit test of dixheure.
+Example of processes submission
 
-Usage: app/console dixheure:test
+Usage: app/console sebk:processes-submission:example
 EOT
             );
     }

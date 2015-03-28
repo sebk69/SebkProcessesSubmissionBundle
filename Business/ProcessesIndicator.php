@@ -193,7 +193,7 @@
             }
 
             // check if process is running, else remove from database and return false
-            $process = $this->container->get("sebk_dixheure.process");
+            $process = $this->container->get("sebk_processes_submition_bundle_process");
             $process->setPid($this->getPid());
             if (!$process->isRunning() || $this->entity->getState() == static::STATE_STOPPED) {
                 if($this->getId() != null) {
