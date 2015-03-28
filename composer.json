@@ -4,6 +4,6 @@
   "type": "project",
   "description": "Processes management lotified",
   "autoload": {
-    "psr-4": { "Sebk\\SebkProcessesSubmissionBundle\\": "" }
+    "psr-4": { "Sebk\\ProcessesSubmissionBundle\\": "" }
   }
 }
