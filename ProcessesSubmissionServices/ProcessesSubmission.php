@@ -189,4 +189,15 @@ class ProcessesSubmission {
     {
         return count($this->queue);
     }
+
+    /**
+     * @return Job
+     */
+    public function createJob()
+    {
+        return $this
+            ->getContainer()
+            ->get("sebk_processes_submition_bundle_business_factory")
+            ->get("Job");
+    }
 }

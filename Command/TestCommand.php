@@ -45,10 +45,8 @@ EOT
         $processesSubmission = $this->getContainer()->get("sebk_processes_submition_bundle_processes_submission");
         for($i=0; $i<20; $i++) {
             $test = new testProcess();
-            $job = $this
-                ->getContainer()
-                ->get("sebk_processes_submition_bundle_business_factory")
-                ->get("Job")
+            $job = $processesSubmission
+                ->createJob()
                 ->setMethodCall($test, "testProcess", array($i));
 
             $processesSubmission->addToQueue($job);
