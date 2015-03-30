@@ -240,6 +240,13 @@
             $state = $this->getState();
             fwrite($f, $state===null?static::STATE_STOPPED:$state);
             fclose($f);
+            $process = $this->container->get("sebk_processes_submition_bundle_process");
+            $process->setPid($this->getPid());
+            if (!$process->isRunning() || $state == static::STATE_STOPPED) {
+                return static::STATE_STOPPED;
+            }
+
+            return $state;
         }
 		/******End Custom Methods*/
 	}

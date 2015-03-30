@@ -19,6 +19,8 @@ use Sebk\ProcessesSubmissionBundle\Business\ProcessesIndicatorException;
  * @package Sebk\ProcessesSubmissionBundle\ProcessesSubmissionServices
  */
 class ProcessesSubmission {
+    const FLUSH_MANUALLY = 0;
+
     private $doctrine;
     private $em;
     protected $businessFactory;
@@ -26,6 +28,7 @@ class ProcessesSubmission {
     private $queue = array();
     private $queueIndex = 0;
     private $filesIndicatorsDirectory;
+    private $flushOnQueueSize = self::FLUSH_MANUALLY;
 
     /**
      * @param BusinessFactory $businessFactory
@@ -120,6 +123,10 @@ class ProcessesSubmission {
         $this->queue[$this->queueIndex] = $job;
         $this->queueIndex++;
 
+        if(count($this->queue) > $this->flushOnQueueSize) {
+            $this->flushQueue();
+        }
+
         return $this;
     }
 
@@ -165,19 +172,26 @@ class ProcessesSubmission {
                         ->businessFactory
                         ->get("ProcessesIndicator")
                         ->loadByPid(getmypid());
+                    if($indicator->getPid() !== null) {
+                        $indicator->persist();
+                    } else {
+                        $indicator->setPid(getmypid());
+                    }
                     $indicator->setState(ProcessesIndicator::STATE_STOPPED);
-                    $indicator->persist();
                     $indicator->writeFileIndicator($this->filesIndicatorsDirectory);
+                    posix_kill(getmypid(), SIGTERM);
                     exit;
                 }
+
                 $job->setProcessIndicator($indicator);
                 if ($job->getProcessName() === null) {
                     $job->setProcessName($indicator->getName());
                 }
+                pcntl_wait($status, WNOHANG);
+
             }
         }
 
-        pcntl_wait($status);
 
         return $this;
     }
@@ -196,8 +210,18 @@ class ProcessesSubmission {
     public function createJob()
     {
         return $this
-            ->getContainer()
-            ->get("sebk_processes_submition_bundle_business_factory")
+            ->businessFactory
             ->get("Job");
+    }
+
+    /**
+     * @param $queueSize
+     * @return $this
+     */
+    public function setFlushOnQueueSize($queueSize)
+    {
+        $this->flushOnQueueSize = $queueSize;
+
+        return $this;
     }
 }
