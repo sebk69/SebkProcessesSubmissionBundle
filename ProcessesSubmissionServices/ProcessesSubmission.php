@@ -22,71 +22,67 @@ class ProcessesSubmission {
     const FLUSH_MANUALLY = 0;
 
     private $doctrine;
-    private $em;
-    protected $businessFactory;
     protected $maxSubmittedProcesses;
-    private $queue = array();
+    private static $queue = array();
     private $queueIndex = 0;
-    private $filesIndicatorsDirectory;
-    private $flushOnQueueSize = self::FLUSH_MANUALLY;
+    private static $filesIndicatorsDirectory;
+    private static $flushOnQueueSize = self::FLUSH_MANUALLY;
+    private static $follow = array();
 
     /**
      * @param BusinessFactory $businessFactory
-     * @param $doctrine
+     * @param int $initialMaxSubmittedProcesses
      */
-    public function __construct(BusinessFactory $businessFactory, $doctrine, $em, $initialMaxSubmittedProcesses = 4) {
-        $this->doctrine = $doctrine;
+    public function __construct(BusinessFactory $businessFactory, $doctrine, $initialMaxSubmittedProcesses = 4) {
         $this->businessFactory = $businessFactory;
+        $this->doctrine = $doctrine;
         $this->maxSubmittedProcesses = $initialMaxSubmittedProcesses;
-        $this->em = $em;
-        $this->filesIndicatorsDirectory = tempnam("/tmp", "processesIndicator");
-        unlink($this->filesIndicatorsDirectory);
-        mkdir($this->filesIndicatorsDirectory);
+        if(self::$filesIndicatorsDirectory === null) {
+            self::$filesIndicatorsDirectory = tempnam("/tmp", "processesIndicator");
+            unlink(self::$filesIndicatorsDirectory);
+            mkdir(self::$filesIndicatorsDirectory);
+        }
+    }
+
+    /**
+     * @param bool $reopen
+     * @return $this
+     */
+    public function closeDoctrineConnections($reopen = false)
+    {
+        $connections = $this->doctrine->getConnections();
+        foreach ($connections as $connection) {
+            $connection->close();
+            gc_collect_cycles();
+            if($reopen) {
+                $connection->connect();
+            }
+        }
+
+        return $this;
     }
 
     /**
      * Fork process and refresh doctrine connection for both child and father
-     * @param null $processName
      * @return int
      * @throws ProcessesSubmissionException
      * @throws \Exception
      */
-    public function fork($processName = null) {
-        $indicator = $this
-            ->businessFactory
-            ->get("ProcessesIndicator");
-        
-        if($processName !== null) {
-            $found = true;
-            try {
-                $indicator->loadByName($processName);
-            } catch (ProcessesIndicatorException $e) {
-                switch ($e->getId()) {
-                    case "not_found":
-                        $found = false;
-                }
-            }
-            
-            if($found && $indicator->isRunning()) {
-                throw new ProcessesSubmissionException("in_use", "A process with that name already running");
-            }
-        }
-
+    public function fork() {
         $pid = pcntl_fork();
 
-        $conn = $this->doctrine->getConnection();
-        $conn->close();
-        $conn->connect();
+        $this->closeDoctrineConnections(true);
 
         if($pid > 0) {
-            if($processName === null) {
-                $processName = "pid".$pid;
-            }
-            $indicator->setName($processName);
+            $indicator = $this
+                ->businessFactory
+                ->get("ProcessesIndicator");
             $indicator->setPid($pid);
             $indicator->setState(ProcessesIndicator::STATE_PROGRESS);
+            $indicator->setDirectory(self::$filesIndicatorsDirectory);
             $indicator->persist();
-            $indicator->writeFileIndicator($this->filesIndicatorsDirectory);
+
+            self::$follow[] = $indicator;
 
             return $indicator;
         } elseif($pid == -1) {
@@ -120,10 +116,10 @@ class ProcessesSubmission {
      * @return $this
      */
     public function addToQueue(Job $job) {
-        $this->queue[$this->queueIndex] = $job;
+        self::$queue[$this->queueIndex] = $job;
         $this->queueIndex++;
 
-        if(count($this->queue) > $this->flushOnQueueSize) {
+        if(count(self::$queue) > self::$flushOnQueueSize) {
             $this->flushQueue();
         }
 
@@ -132,20 +128,18 @@ class ProcessesSubmission {
 
     /**
      * @return int
-     * @throws \Exception
      */
     public function getNumberOfJobsRunning()
     {
-        $indicators = $this
-            ->businessFactory
-            ->get("ProcessesIndicatorCollection");
-        $indicators->addAndBuildFromQuery($indicators->createQueryBuilder("test"), true);
         $numJobsRunning = 0;
-        foreach($indicators as $indicator) {
-            if($indicator->isRunning()) {
-                if($indicator->getStateFromFile($this->filesIndicatorsDirectory) != ProcessesIndicator::STATE_STOPPED) {
+        foreach(self::$follow as $key => $indicator) {
+            switch($indicator->getState()) {
+                case ProcessesIndicator::STATE_PROGRESS:
                     $numJobsRunning++;
-                }
+                    break;
+                case ProcessesIndicator::STATE_STOPPED:
+                    array_splice(self::$follow, $key, 1);
+                    break;
             }
         }
 
@@ -158,40 +152,45 @@ class ProcessesSubmission {
      */
     public function flushQueue()
     {
-        while(count($this->queue)) {
+        while($this->getNumJobsInQueue()) {
             if($this->getNumberOfJobsRunning() < $this->maxSubmittedProcesses) {
-                foreach($this->queue as $key => $job) {
-                    array_splice($this->queue, 0, 1);
+                foreach(self::$queue as $key => $job) {
+                    array_splice(self::$queue, 0, 1);
                     break;
                 }
 
-                $indicator = $this->fork($job->getProcessName());
+                $indicator = $this->fork();
                 if ($indicator === null) {
-                    $job->doJob();
                     $indicator = $this
                         ->businessFactory
-                        ->get("ProcessesIndicator")
-                        ->loadByPid(getmypid());
-                    if($indicator->getPid() !== null) {
-                        $indicator->persist();
-                    } else {
-                        $indicator->setPid(getmypid());
-                    }
+                        ->get("ProcessesIndicator");
+                    $indicator->setPid(getmypid());
+                    $indicator->setDirectory(self::$filesIndicatorsDirectory);
+                    $indicator->waitForFile();
+                    $job->doJob();
                     $indicator->setState(ProcessesIndicator::STATE_STOPPED);
-                    $indicator->writeFileIndicator($this->filesIndicatorsDirectory);
-                    posix_kill(getmypid(), SIGTERM);
+                    $indicator->persist(self::$filesIndicatorsDirectory);
+                    $this->closeDoctrineConnections();
                     exit;
                 }
 
                 $job->setProcessIndicator($indicator);
-                if ($job->getProcessName() === null) {
-                    $job->setProcessName($indicator->getName());
-                }
                 pcntl_wait($status, WNOHANG);
-
             }
         }
 
+
+        return $this;
+    }
+
+    /**
+     * @return $this
+     */
+    public function waitAllFinished()
+    {
+        while($this->getNumberOfJobsRunning()) {
+            sleep(1);
+        }
 
         return $this;
     }
@@ -201,7 +200,7 @@ class ProcessesSubmission {
      */
     public function getNumJobsInQueue()
     {
-        return count($this->queue);
+        return count(self::$queue);
     }
 
     /**
@@ -220,7 +219,7 @@ class ProcessesSubmission {
      */
     public function setFlushOnQueueSize($queueSize)
     {
-        $this->flushOnQueueSize = $queueSize;
+        self::$flushOnQueueSize = $queueSize;
 
         return $this;
     }

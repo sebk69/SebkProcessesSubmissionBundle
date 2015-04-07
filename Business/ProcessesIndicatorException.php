@@ -7,9 +7,7 @@
 	
 	namespace Sebk\ProcessesSubmissionBundle\Business;
 
-	use Sebk\ProcessesSubmissionBundle\Business\BusinessException;
-	
-	class ProcessesIndicatorException extends BusinessException
+	class ProcessesIndicatorException extends \Exception
 	{
     /******Begin Custom Exception*/
     /******End Custom Exception*/

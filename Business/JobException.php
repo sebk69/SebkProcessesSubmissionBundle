@@ -8,6 +8,6 @@
 namespace Sebk\ProcessesSubmissionBundle\Business;
 
 
-class JobException extends BusinessException {
+class JobException extends \Exception {
 
 }

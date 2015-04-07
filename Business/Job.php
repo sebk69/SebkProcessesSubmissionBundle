@@ -24,6 +24,10 @@ class Job {
     const JOB_TYPE_FUNCTION = "function";
     const JOB_TYPE_METHOD = "method";
 
+    public function __construct($container)
+    {
+    }
+
     /**
      * @return string | null
      */

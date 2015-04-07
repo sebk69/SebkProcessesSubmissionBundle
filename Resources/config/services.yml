@@ -2,11 +2,11 @@ services:
 
     sebk_processes_submition_bundle_business_factory:
         class: Sebk\ProcessesSubmissionBundle\Business\BusinessFactory
-        arguments: [@doctrine.orm.entity_manager, @service_container, @doctrine]
+        arguments: [@service_container]
 
     sebk_processes_submition_bundle_processes_submission:
         class: Sebk\ProcessesSubmissionBundle\ProcessesSubmissionServices\ProcessesSubmission
-        arguments: [@sebk_processes_submition_bundle_business_factory, @doctrine, @doctrine.orm.entity_manager]
+        arguments: [@sebk_processes_submition_bundle_business_factory, @doctrine]
 
     sebk_processes_submition_bundle_process:
         class: Sebk\ProcessesSubmissionBundle\ProcessesSubmissionServices\Process
